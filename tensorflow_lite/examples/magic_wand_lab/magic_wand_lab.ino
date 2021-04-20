@@ -1,16 +1,16 @@
 /* Copyright 2020 The TensorFlow Authors. All Rights Reserved.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
     http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-==============================================================================*/
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  ==============================================================================*/
 
-#include <TensorFlowLite.h>
+#include <Pico4ML.h>
 
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -20,51 +20,59 @@ limitations under the License.
 #include "magic_wand_model_data.h"
 #include "rasterize_stroke.h"
 #include "imu_provider.h"
-#include "st7735.h"
+#define SCREEN 1
 
+#if SCREEN
+#include "st7735.h"
+#endif
 
 namespace {
 
-  const int VERSION = 0x00000000;
+// Constants for image rasterization
+constexpr int raster_width = 32;
+constexpr int raster_height = 32;
+constexpr int raster_channels = 3;
+constexpr int raster_byte_count = raster_height * raster_width * raster_channels;
+int8_t raster_buffer[raster_byte_count];
 
-  // Constants for image rasterization
-  constexpr int raster_width = 32;
-  constexpr int raster_height = 32;
-  constexpr int raster_channels = 3;
-  constexpr int raster_byte_count = raster_height * raster_width * raster_channels;
-  int8_t raster_buffer[raster_byte_count];
-  
-  // Create an area of memory to use for input, output, and intermediate arrays.
-  // The size of this will depend on the model you're using, and may need to be
-  // determined by experimentation.
-  constexpr int kTensorArenaSize = 30 * 1024;
-  uint8_t tensor_arena[kTensorArenaSize];
-  
-  tflite::ErrorReporter* error_reporter = nullptr;
-  const tflite::Model* model = nullptr;
-  tflite::MicroInterpreter* interpreter = nullptr;
-  
-  // -------------------------------------------------------------------------------- //
-  // UPDATE THESE VARIABLES TO MATCH THE NUMBER AND LIST OF GESTURES IN YOUR DATASET  //
-  // -------------------------------------------------------------------------------- //
-  constexpr int label_count = 10;
-  const char* labels[label_count] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+// Create an area of memory to use for input, output, and intermediate arrays.
+// The size of this will depend on the model you're using, and may need to be
+// determined by experimentation.
+constexpr int kTensorArenaSize = 30 * 1024;
+uint8_t tensor_arena[kTensorArenaSize];
+
+tflite::ErrorReporter* error_reporter = nullptr;
+const tflite::Model* model = nullptr;
+tflite::MicroInterpreter* interpreter = nullptr;
+
+// -------------------------------------------------------------------------------- //
+// UPDATE THESE VARIABLES TO MATCH THE NUMBER AND LIST OF GESTURES IN YOUR DATASET  //
+// -------------------------------------------------------------------------------- //
+constexpr int label_count = 10;
+const char* labels[label_count] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
 }  // namespace
+bool linked = false;
+uint16_t send_index = 0;
+uint8_t output[328] = {0};
 
-void setup() { 
+void setup() {
+  pinMode(22, INPUT);
+  pinMode(25, OUTPUT);
+  digitalWrite(25, HIGH);
+
   // Start serial
-  Serial.begin(9600);
-  Serial.println("Started");
-  
-  
+  Serial.begin(115200);
+  Serial1.begin(115200);
+
+#if SCREEN
   ST7735_Init();
   ST7735_DrawImage(0, 0, 80, 160, arducam_logo);
-
+#endif
 
   // Start IMU
   SetupIMU();
-
+  Serial.println("Started");
   // Set up logging. Google style is to avoid globals or statics because of
   // lifetime uncertainty, but since this has a trivial destructor it's okay.
   static tflite::MicroErrorReporter micro_error_reporter;  // NOLINT
@@ -94,7 +102,7 @@ void setup() {
 
   // Build an interpreter to run the model with.
   static tflite::MicroInterpreter static_interpreter(
-      model, micro_op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
+    model, micro_op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
   interpreter = &static_interpreter;
 
   // Allocate memory from the tensor_arena for the model's tensors.
@@ -121,13 +129,16 @@ void setup() {
                          "Bad output tensor parameters in model");
     return;
   }
+#if SCREEN
   ST7735_FillScreen(ST7735_GREEN);
 
   ST7735_WriteString(5, 20, "Magic", Font_11x18, ST7735_BLACK, ST7735_GREEN);
   ST7735_WriteString(30, 45, "Wand", Font_11x18, ST7735_BLACK, ST7735_GREEN);
+#endif
 }
 
 void loop() {
+  digitalWrite(25, LOW);
   int accelerometer_samples_read;
   int gyroscope_samples_read;
   ReadAccelerometerAndGyroscope(&accelerometer_samples_read, &gyroscope_samples_read);
@@ -138,14 +149,34 @@ void loop() {
     EstimateGyroscopeDrift(current_gyroscope_drift);
     UpdateOrientation(gyroscope_samples_read, current_gravity, current_gyroscope_drift);
     UpdateStroke(gyroscope_samples_read, &done_just_triggered);
+    if (digitalRead(22)) {
+      if (!linked) {
+        sleep_ms(5000);
+      }
+      linked = true;
+      if (send_index == 0) {
+        memcpy(output, stroke_struct_buffer, 328);
+        // Serial1.write(header, 2);
+        Serial1.write(output , 8);
+        send_index += 8;
+      } else {
+        Serial1.write(output + send_index, 20);
+        send_index += 20;
+      }
+      if (send_index == 328) {
+        send_index = 0;
+      }
+    } else {
+      linked = false;
+    }
   }
   if (accelerometer_samples_read > 0) {
     EstimateGravityDirection(current_gravity);
     UpdateVelocity(accelerometer_samples_read, current_gravity);
   }
-
+  digitalWrite(25, HIGH);
   // Wait for a gesture to be done
-  if (done_just_triggered) {
+  if (done_just_triggered and !digitalRead(22)) {
     // Rasterize the gesture
     RasterizeStroke(stroke_points, *stroke_transmit_length, 0.6f, 0.6f, raster_width, raster_height, raster_buffer);
     for (int y = 0; y < raster_height; ++y) {
@@ -189,14 +220,15 @@ void loop() {
         max_index = i;
       }
     }
-    int8_t final_score = ((max_score+128)*100)>>8;
+    int8_t final_score = ((max_score + 128) * 100) >> 8;
     TF_LITE_REPORT_ERROR(error_reporter, "Found %s (%d%%)", labels[max_index], final_score);
-
+#if SCREEN
     char str[10];
-    sprintf(str,"%d%%",final_score);
+    sprintf(str, "%d%%", final_score);
 
     ST7735_FillRectangle(0, 80, ST7735_WIDTH, 160 - 80, ST7735_GREEN);
     ST7735_WriteString(35, 90, labels[max_index], Font_11x18, ST7735_BLACK, ST7735_GREEN);
     ST7735_WriteString(25, 120, str, Font_11x18, ST7735_BLACK, ST7735_GREEN);
+#endif
   }
 }

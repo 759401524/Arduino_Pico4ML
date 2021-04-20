@@ -26,19 +26,10 @@ void setup() {
 
 void loop() {
   digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  
-  arducam_capture_frame(&config, (uint8_t *)image_data);
-  uint8_t *displayBuf = new uint8_t[96 * 96 * 2];
-  uint16_t index      = 0;
-  for (int x = 0; x < 96 * 96; x++) {
-    uint16_t imageRGB   = ST7735_COLOR565(image_data[x], image_data[x], image_data[x]);
-    displayBuf[index++] = (uint8_t)(imageRGB >> 8) & 0xFF;
-    displayBuf[index++] = (uint8_t)(imageRGB) & 0xFF;
-  }
-  delete[] displayBuf;
 
-  uart_write_blocking(UART_ID, header, 2);
-  uart_write_blocking(UART_ID, (uint8_t *)image_data, kMaxImageSize);
-  
+  arducam_capture_frame(&config, image_data);
+  Serial1.write(header, 2);
+  Serial1.write(image_data, 96 * 96);
+
   digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
 }

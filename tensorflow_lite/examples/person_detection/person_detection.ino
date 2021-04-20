@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include <TensorFlowLite.h>
+#include <Pico4ML.h>
 
 #include "main_functions.h"
 #include "st7735.h"
@@ -49,7 +49,8 @@ static uint8_t tensor_arena[kTensorArenaSize];
 
 // The name of this function is important for Arduino compatibility.
 void setup() {
-   Serial1.begin(921600);
+  Serial.begin(115200);
+  Serial1.begin(921600);
   pinMode(LED_BUILTIN, OUTPUT);
 
   // Set up logging. Google style is to avoid globals or statics because of

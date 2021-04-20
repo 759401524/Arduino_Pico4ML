@@ -69,10 +69,9 @@ TfLiteStatus GetImage(tflite::ErrorReporter *error_reporter, int image_width,
   delete[] displayBuf;
 #endif
 
-#ifndef DO_NOT_OUTPUT_TO_UART
-uart_write_blocking(UART_ID, header, 2);
-uart_write_blocking(UART_ID, (uint8_t *)image_data, kMaxImageSize);
-#endif
+Serial1.write(header, 2);
+Serial1.write((uint8_t *)image_data, kMaxImageSize);
+
 
   for (int i = 0; i < image_width * image_height * channels; ++i) {
     image_data[i] = (uint8_t)image_data[i] - 128;

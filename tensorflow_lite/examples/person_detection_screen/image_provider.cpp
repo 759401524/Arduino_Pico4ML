@@ -20,17 +20,12 @@ limitations under the License.
 #include "arducam.h"
 #include "st7735.h"
 
-//#include "stdio.h"/
-//#include "stdlib.h"/
-
 struct arducam_config config;
 TfLiteStatus ScreenInit(tflite::ErrorReporter *error_reporter) {
-//  stdio_init_all();
-  //  sleep_ms(1000);
 #if SCREEN
     ST7735_Init();
     ST7735_DrawImage(0, 0, 80, 160, arducam_logo);
-    sleep_ms(1000);
+    delay(1000);
 #endif
 
   config.sccb            = i2c0;
@@ -69,7 +64,6 @@ TfLiteStatus GetImage(tflite::ErrorReporter *error_reporter, int image_width,
   ST7735_DrawImage(0, 0, 96, 96, displayBuf);
   delete[] displayBuf;
 #endif
-
 
   for (int i = 0; i < image_width * image_height * channels; ++i) {
     image_data[i] = (uint8_t)image_data[i] - 128;

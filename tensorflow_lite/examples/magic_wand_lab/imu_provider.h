@@ -76,7 +76,7 @@ void ReadAccelerometerAndGyroscope(int *new_accelerometer_samples,
     if (!ICM20948::icm20948GyroRead(&current_gyroscope_data_tmp[0],
                                     &current_gyroscope_data_tmp[1],
                                     &current_gyroscope_data_tmp[2])) {
-      printf("Failed to read gyroscope data");
+      Serial.println("Failed to read gyroscope data");
       break;
     }
     current_gyroscope_data[0] = -current_gyroscope_data_tmp[1];
@@ -94,7 +94,7 @@ void ReadAccelerometerAndGyroscope(int *new_accelerometer_samples,
     if (!ICM20948::icm20948AccelRead(&current_acceleration_data_tmp[0],
                                      &current_acceleration_data_tmp[1],
                                      &current_acceleration_data_tmp[2])) {
-      printf("Failed to read acceleration data");
+      Serial.println("Failed to read acceleration data");
       break;
     }
     current_acceleration_data[0] = -current_acceleration_data_tmp[1];
@@ -117,7 +117,7 @@ int ReadGyroscope() {
 
     // Read each sample, removing it from the device's FIFO buffer
     if (!ICM20948::icm20948GyroRead(&data_tmp[0], &data_tmp[1], &data_tmp[2])) {
-      printf("Failed to read gyroscope data");
+      Serial.println("Failed to read gyroscope data");
       break;
     }
     data[0] = -data_tmp[1];
